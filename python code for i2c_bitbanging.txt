@@ -1,0 +1,160 @@
+import time
+import RPi.GPIO as GPIO
+
+
+# Define the GPIO pins for SDA and SCL
+SDA_PIN = 26
+SCL_PIN = 21
+dev_addr= 0x40
+
+# Set up the GPIO pins
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(SDA_PIN, GPIO.OUT)
+GPIO.setup(SCL_PIN, GPIO.OUT)
+
+
+# Define the I2C start signal
+def i2c_start():
+    GPIO.output(SDA_PIN, GPIO.HIGH)
+    GPIO.output(SCL_PIN, GPIO.HIGH)
+    time.sleep(0.00000005)
+    GPIO.output(SDA_PIN, GPIO.LOW)
+    time.sleep(0.00000005)
+    GPIO.output(SCL_PIN, GPIO.LOW)
+
+# Define the I2C stop signal
+def i2c_stop():
+    GPIO.output(SDA_PIN, GPIO.LOW)
+    GPIO.output(SCL_PIN, GPIO.LOW)
+    time.sleep(0.00000005)
+    GPIO.output(SCL_PIN, GPIO.HIGH)
+    time.sleep(0.00000005)
+    GPIO.output(SDA_PIN, GPIO.HIGH)
+    
+
+# Define the I2C write function
+def i2c_write_byte(byte):
+    for bit in range(8):
+        if byte & (1 << (7 - bit)):
+            GPIO.output(SDA_PIN, GPIO.HIGH)
+        else:
+            GPIO.output(SDA_PIN, GPIO.LOW)
+        GPIO.output(SCL_PIN, GPIO.HIGH)
+        time.sleep(0.00000005)
+        GPIO.output(SCL_PIN, GPIO.LOW)
+
+def ACK():	
+    GPIO.output(SDA_PIN, GPIO.HIGH)
+    GPIO.output(SCL_PIN, GPIO.HIGH)
+    time.sleep(0.00000005)
+    while(SDA_PIN == GPIO.HIGH):
+         continue
+    time.sleep(0.00000005)
+    GPIO.output(SCL_PIN, GPIO.LOW)
+    
+    
+    
+# Define the I2C read function
+def i2c_read_byte():
+    byte = 0
+    for bit in range(8):
+        GPIO.output(SCL_PIN, GPIO.HIGH)
+        time.sleep(0.00000003)
+        if GPIO.input(SDA_PIN):
+            byte |= 1 << (7 - bit)
+        GPIO.output(SCL_PIN, GPIO.LOW)
+    return byte
+
+
+def NACK():	
+    GPIO.output(SDA_PIN, GPIO.HIGH)
+    GPIO.output(SCL_PIN, GPIO.HIGH)
+    time.sleep(0.00000005)
+    GPIO.output(SCL_PIN, GPIO.LOW)
+
+
+#define GPIO to LCD mapping
+LCD_RS = 5
+LCD_E  = 6
+LCD_D4 = 12
+LCD_D5 = 13
+LCD_D6 = 16
+LCD_D7 = 19
+ 
+# Define some device constants
+LCD_WIDTH = 16    # Maximum characters per line
+LCD_CHR = True
+LCD_CMD = False
+ 
+LCD_LINE_1 = 0x80 # LCD RAM address for the 1st line
+LCD_LINE_2 = 0xC0 # LCD RAM address for the 2nd line
+ 
+# Timing constants
+E_PULSE = 0.0005
+E_DELAY = 0.0005
+ 
+def main():
+  # Main program block
+  GPIO.setwarnings(False)
+  GPIO.setmode(GPIO.BCM)       # Use BCM GPIO numbers
+  GPIO.setup(LCD_E, GPIO.OUT)  # E
+  GPIO.setup(LCD_RS, GPIO.OUT) # RS
+  GPIO.setup(LCD_D4, GPIO.OUT) # DB4
+  GPIO.setup(LCD_D5, GPIO.OUT) # DB5
+  GPIO.setup(LCD_D6, GPIO.OUT) # DB6
+  GPIO.setup(LCD_D7, GPIO.OUT) # DB7
+ 
+  # Initialise display
+  lcd_init()
+     
+  while (True):       
+      i2c_start()
+      i2c_write_byte(dev_addr << 1) # Write to device with address 0x50
+      ACK()
+      i2c_write_byte(0xFE)
+      ACK()
+      i2c_stop()
+      time.sleep(0.00020)
+       
+      i2c_start()
+      i2c_write_byte(dev_addr <<1)
+      ACK()
+      i2c_write_byte(0xF3)
+      ACK()
+      time.sleep(0.086)
+      i2c_start()
+      i2c_write_byte(dev_addr <<1 | 0x01)
+      ACK()
+      temp_0= i2c_read_byte()
+      ACK()
+      temp_1 =i2c_read_byte()
+      ACK()
+      temp_2 =i2c_read_byte() 
+      NACK()  
+      i2c_stop()
+        
+      i2c_start()
+      i2c_write_byte(dev_addr <<1)
+      ACK()
+      i2c_write_byte(0xF5)
+      ACK()
+      time.sleep(0.03)
+      i2c_start()
+      i2c_write_byte(dev_addr <<1 | 0x01)
+      ACK()
+      hum_0= i2c_read_byte()
+      ACK()
+      hum_1 =i2c_read_byte()
+      ACK()
+      hum_2 =i2c_read_byte()
+      ACK()
+      i2c_stop()
+       
+      t = ((temp_0 << 8) +temp_1) & 0xFFFC  # set status bits to zero
+      t = -46.85 + ((t * 175.72) / 65536)  # T = 46.82 + (175.72 * ST/2^16 )
+      t=round(t, 1)
+       
+      rh = ((hum_0 << 8) + hum_1) & 0xFFFC  # zero the status bits
+      rh = -6 + ((125 * rh) / 65536)
+      if (rh > 100): rh = 100
+      rh=round(rh, 1)
