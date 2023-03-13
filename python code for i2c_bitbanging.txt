@@ -5,10 +5,14 @@ import RPi.GPIO as GPIO
 # Define the GPIO pins for SDA and SCL
 SDA_PIN = 26
 SCL_PIN = 21
+
+# Define the slave device address
 dev_addr= 0x40
 
-# Set up the GPIO pins
+# Set up the GPIO pins in BCM mode(uses GPIO numbers)
 GPIO.setmode(GPIO.BCM)
+
+#set up the SDA_PIN and SCL_PIN as output pins
 GPIO.setup(SDA_PIN, GPIO.OUT)
 GPIO.setup(SCL_PIN, GPIO.OUT)
 
@@ -42,7 +46,8 @@ def i2c_write_byte(byte):
         GPIO.output(SCL_PIN, GPIO.HIGH)
         time.sleep(0.00000005)
         GPIO.output(SCL_PIN, GPIO.LOW)
-
+        
+# Define the acknowledge
 def ACK():	
     GPIO.output(SDA_PIN, GPIO.HIGH)
     GPIO.output(SCL_PIN, GPIO.HIGH)
@@ -65,90 +70,59 @@ def i2c_read_byte():
         GPIO.output(SCL_PIN, GPIO.LOW)
     return byte
 
-
+# Define non-acknowledgement function
 def NACK():	
     GPIO.output(SDA_PIN, GPIO.HIGH)
     GPIO.output(SCL_PIN, GPIO.HIGH)
     time.sleep(0.00000005)
     GPIO.output(SCL_PIN, GPIO.LOW)
 
-
-#define GPIO to LCD mapping
-LCD_RS = 5
-LCD_E  = 6
-LCD_D4 = 12
-LCD_D5 = 13
-LCD_D6 = 16
-LCD_D7 = 19
- 
-# Define some device constants
-LCD_WIDTH = 16    # Maximum characters per line
-LCD_CHR = True
-LCD_CMD = False
- 
-LCD_LINE_1 = 0x80 # LCD RAM address for the 1st line
-LCD_LINE_2 = 0xC0 # LCD RAM address for the 2nd line
- 
-# Timing constants
-E_PULSE = 0.0005
-E_DELAY = 0.0005
  
 def main():
   # Main program block
-  GPIO.setwarnings(False)
-  GPIO.setmode(GPIO.BCM)       # Use BCM GPIO numbers
-  GPIO.setup(LCD_E, GPIO.OUT)  # E
-  GPIO.setup(LCD_RS, GPIO.OUT) # RS
-  GPIO.setup(LCD_D4, GPIO.OUT) # DB4
-  GPIO.setup(LCD_D5, GPIO.OUT) # DB5
-  GPIO.setup(LCD_D6, GPIO.OUT) # DB6
-  GPIO.setup(LCD_D7, GPIO.OUT) # DB7
- 
-  # Initialise display
-  lcd_init()
-     
+  GPIO.setwarnings(False)    
   while (True):       
-      i2c_start()
-      i2c_write_byte(dev_addr << 1) # Write to device with address 0x50
-      ACK()
-      i2c_write_byte(0xFE)
-      ACK()
-      i2c_stop()
-      time.sleep(0.00020)
+      i2c_start() # send the start signal
+      i2c_write_byte(dev_addr << 1) #  send the device address with 8th bit as zero for writing
+      ACK() # sending the acknowledgement
+      i2c_write_byte(0xFE) # send the command for software reset
+      ACK() # sending the acknowledgement
+      i2c_stop() # send the stop signal
+      time.sleep(0.00020) # wait for 2 ms until software reset is completed 
        
-      i2c_start()
-      i2c_write_byte(dev_addr <<1)
-      ACK()
-      i2c_write_byte(0xF3)
-      ACK()
-      time.sleep(0.086)
-      i2c_start()
-      i2c_write_byte(dev_addr <<1 | 0x01)
-      ACK()
-      temp_0= i2c_read_byte()
-      ACK()
-      temp_1 =i2c_read_byte()
-      ACK()
-      temp_2 =i2c_read_byte() 
-      NACK()  
-      i2c_stop()
+      i2c_start() # send the start signal
+      i2c_write_byte(dev_addr <<1) # send the device address with 8th bit as zero for writing
+      ACK() # sending the acknowledgement
+      i2c_write_byte(0xF3) # send the command for temeprature measurment
+      ACK() # sending the acknowledgement
+      time.sleep(0.086) # # wait, typ=66ms, max=85ms @ 14Bit resolution
+      i2c_start() # send the start signal (repeated start)
+      i2c_write_byte(dev_addr <<1 | 0x01) # send the device address with 8th bit as 1 for reading 
+      ACK() # sending the acknowledgement
+      temp_0= i2c_read_byte() # read the 1st byte of data (MSB)
+      ACK() # sending the acknowledgement
+      temp_1 =i2c_read_byte() # read the 2nd byte of data (MSB)
+      ACK() # sending the acknowledgement
+      temp_2 =i2c_read_byte() # read the 3rd byte of data (LSB)
+      NACK() # sending the negative acknowledgement
+      i2c_stop() # send the stop signal
         
-      i2c_start()
-      i2c_write_byte(dev_addr <<1)
-      ACK()
-      i2c_write_byte(0xF5)
-      ACK()
-      time.sleep(0.03)
-      i2c_start()
-      i2c_write_byte(dev_addr <<1 | 0x01)
-      ACK()
+      i2c_start() # send the start signal
+      i2c_write_byte(dev_addr <<1) # send the device address with 8th bit as zero for writing
+      ACK() # wait for the acknowledgement 
+      i2c_write_byte(0xF5) # send the command for realtive humidity measurment
+      ACK() #  sending the acknowledgement
+      time.sleep(0.03) # wait, typ=22ms, max=29ms @ 12Bit resolution
+      i2c_start() # send the start signal (repeated start)
+      i2c_write_byte(dev_addr <<1 | 0x01) # send the device address with 8th bit as 1 for reading 
+      ACK() # sending the acknowledgement
       hum_0= i2c_read_byte()
-      ACK()
+      ACK() # sending the acknowledgement
       hum_1 =i2c_read_byte()
-      ACK()
+      ACK() # sending the acknowledgement
       hum_2 =i2c_read_byte()
-      ACK()
-      i2c_stop()
+      NACK() # sending the negative acknowledgement
+      i2c_stop() # sending the stop bit
        
       t = ((temp_0 << 8) +temp_1) & 0xFFFC  # set status bits to zero
       t = -46.85 + ((t * 175.72) / 65536)  # T = 46.82 + (175.72 * ST/2^16 )
