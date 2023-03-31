@@ -133,5 +133,6 @@ def main():
       if (rh > 100): rh = 100
       rh=round(rh, 1)
      
-     print("Temerature in deg: ",t)
+     print(f"Temperature : {t}{chr(248)}C")
      print("Relative humidity percentage: ",rh)
+        
