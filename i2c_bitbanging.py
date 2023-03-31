@@ -135,14 +135,14 @@ def main():
      
      print(f"Temperature : {t}{chr(248)}C")
      print("Relative humidity percentage: ",rh)
-        
+      
  
 if __name__ == '__main__':
- 
   try:
     main()
   except KeyboardInterrupt:
-    pass
+    print("User interrupted the program.")
+    sys.exit()
   finally:
     GPIO.cleanup()
     
