@@ -132,3 +132,6 @@ def main():
       rh = -6 + ((125 * rh) / 65536)
       if (rh > 100): rh = 100
       rh=round(rh, 1)
+     
+     print("Temerature in deg: ",t)
+     print("Relative humidity percentage: ",rh)
